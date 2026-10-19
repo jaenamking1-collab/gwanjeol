@@ -1,0 +1,17 @@
+name = "gwanjeol"
+main = "src/index.js"
+compatibility_date = "2026-09-14"
+workers_dev = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gwanjeol"
+database_id = "3641aed9-f108-4bda-b89f-c030ae2fe0cf"
+
+# KST 23:00 예보 박제 / KST 03:00 채점
+[triggers]
+crons = ["0 14 * * *", "0 18 * * *"]

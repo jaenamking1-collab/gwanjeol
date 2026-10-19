@@ -1,0 +1,15 @@
+# 매일 아침 9시(KST): 새벽 채점이 돌았는지 확인. 실패하면 GitHub 가 메일을 보낸다.
+name: health
+on:
+  schedule: [{ cron: "0 0 * * *" }]
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          s=$(curl -sf https://gwanjeol.distributionjn.workers.dev/api/today | jq -r '.meta.score // empty')
+          echo "마지막 채점: $s"
+          [ -n "$s" ] || { echo "채점 기록 없음"; exit 1; }
+          age=$(( $(date +%s) - $(date -d "$s" +%s) ))
+          [ $age -lt 108000 ] || { echo "채점이 30시간 넘게 멈춤"; exit 1; }
