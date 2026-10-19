@@ -10,7 +10,6 @@ const NAMES = Object.keys(REGIONS);
 const DEADLINE_H = 23; // 밤 11시 마감 = 예보 박제 시각
 const RAIN_POP = 50;   // 강수확률 50% 이상이면 '비 예보'
 const RAIN_MM = 1;     // 실제 1mm 이상이면 '비 왔다'
-const IP_CAP = 5;      // ponytail: 기기토큰+IP 상한뿐. 조직적 도배가 보이면 Turnstile 추가
 
 const kst = (ms = Date.now()) => new Date(ms + 9 * 3600e3);
 const ymd = d => d.toISOString().slice(0, 10);
@@ -116,14 +115,19 @@ async function api(req, env, url) {
     let user = await env.DB.prepare('SELECT nick FROM users WHERE token=?').bind(token).first();
     if (!user) {
       if (!/^[가-힣a-zA-Z0-9_]{2,10}$/.test(nick)) return json({ error: '닉네임은 한글·영문·숫자 2~10자입니다' }, 400);
-      if (await env.DB.prepare('SELECT 1 FROM users WHERE nick=?').bind(nick).first()) return json({ error: '이미 있는 닉네임입니다' }, 409);
-      await env.DB.prepare('INSERT INTO users VALUES (?,?,?)').bind(token, nick, new Date().toISOString()).run();
+      // 대소문자만 다른 닉네임(Knee/knee)도 같은 것으로 본다
+      if (await env.DB.prepare('SELECT 1 FROM users WHERE lower(nick)=lower(?)').bind(nick).first()) return json({ error: '이미 있는 닉네임입니다. 다른 이름을 써 주세요' }, 409);
     }
-    const ipn = await env.DB.prepare('SELECT COUNT(*) c FROM votes WHERE day=? AND iphash=?').bind(day, ip).first();
-    if (ipn.c >= IP_CAP) return json({ error: '이 인터넷에서는 오늘 투표가 너무 많습니다' }, 429);
-    const r = await env.DB.prepare('INSERT OR IGNORE INTO votes (day,region,token,pick,iphash,created) VALUES (?,?,?,?,?,?)')
-      .bind(day, region, token, pick, ip, new Date().toISOString()).run();
-    if (!r.meta.changes) return json({ error: '이미 투표하셨습니다. 내일 또 와주세요' }, 409);
+    if (await env.DB.prepare('SELECT 1 FROM votes WHERE day=? AND token=?').bind(day, token).first())
+      return json({ error: '이미 투표하셨습니다. 내일 또 와주세요' }, 409);
+    // 창·브라우저를 바꿔도 같은 인터넷(IP)이면 하루 1표. 표가 들어갈 때만 닉네임을 만든다
+    if (await env.DB.prepare('SELECT 1 FROM votes WHERE day=? AND iphash=?').bind(day, ip).first())
+      return json({ error: '이 인터넷(IP)에서는 오늘 이미 투표했습니다. 내일 또 와주세요' }, 409);
+    const now = new Date().toISOString(), stmts = [];
+    if (!user) stmts.push(env.DB.prepare('INSERT INTO users VALUES (?,?,?)').bind(token, nick, now));
+    stmts.push(env.DB.prepare('INSERT INTO votes (day,region,token,pick,iphash,created) VALUES (?,?,?,?,?,?)').bind(day, region, token, pick, ip, now));
+    try { await env.DB.batch(stmts); } // 동시에 눌러도 DB 고유 제약이 한 표만 남긴다
+    catch (e) { return json({ error: '이미 투표했거나 같은 닉네임이 있습니다' }, 409); }
     return json({ ok: true, day });
   }
 

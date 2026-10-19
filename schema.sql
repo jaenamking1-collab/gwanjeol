@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS votes (
   points INTEGER,
   PRIMARY KEY (day, token)
 );
-CREATE INDEX IF NOT EXISTS votes_ip ON votes (day, iphash);
+CREATE UNIQUE INDEX IF NOT EXISTS votes_ip1 ON votes (day, iphash);
+CREATE UNIQUE INDEX IF NOT EXISTS users_nick ON users (lower(nick));
 
 -- 밤 11시 예보 박제 + 다음날 실제 + 판정
 CREATE TABLE IF NOT EXISTS results (
