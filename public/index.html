@@ -27,7 +27,9 @@ h1{font-family:'Black Han Sans',sans-serif;font-weight:400;font-size:40px;margin
 .score{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;text-align:center}
 .score b{font-family:'Black Han Sans';font-weight:400;font-size:44px;display:block;line-height:1}
 .score .vs{font-family:'Black Han Sans';color:var(--stamp);font-size:20px}
-select{font:inherit;font-size:16px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.regions{display:grid;grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:6px}
+.regions button{font:inherit;font-size:14px;padding:9px 2px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.regions button.on{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:700}
 .fc{display:flex;align-items:center;gap:14px}
 .fc .ico{font-size:48px}
 .fc .big{font-size:22px;font-weight:700}
@@ -71,10 +73,12 @@ footer{font-size:12px;color:var(--sub);text-align:center;margin-top:16px}
   </section>
 
   <section class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <h2 style="margin:0" id="fcTitle">내일 예보</h2>
-      <select id="region"></select>
-    </div>
+    <h2>내 지역</h2>
+    <div class="regions" id="regions"></div>
+  </section>
+
+  <section class="card">
+    <h2 id="fcTitle">내일 예보</h2>
     <div class="fc"><div class="ico" id="fcIco">⏳</div><div><div class="big" id="fcBig">불러오는 중</div><div class="legend" id="fcSub"></div></div></div>
   </section>
 
@@ -112,7 +116,7 @@ footer{font-size:12px;color:var(--sub);text-align:center;margin-top:16px}
   </footer>
 </main>
 <script>
-const NAMES = ['서울','부산','대구','인천','광주','대전','울산','세종','경기','강원','충북','충남','전북','전남','경북','경남','제주'];
+const NAMES = ['서울','부산','대구','인천','광주','대전','울산','세종','경기북부','경기남부','강원영서','강원영동','충북','충남','전북','전남','경북','경남','제주'];
 const $ = id => document.getElementById(id);
 const store = { get(k){ try{ return localStorage.getItem(k) }catch(e){ return null } }, set(k,v){ try{ localStorage.setItem(k,v) }catch(e){} } };
 let token = store.get('gj_token');
@@ -121,12 +125,17 @@ const api = (p, o = {}) => fetch(p, { ...o, headers: { 'x-token': token, 'conten
 const md = s => { const [, m, d] = s.split('-'); return `${+m}/${+d}`; };
 let state = null;
 
-$('region').innerHTML = NAMES.map(n => `<option>${n}</option>`).join('');
-$('region').value = store.get('gj_region') || '서울';
-$('region').onchange = () => { store.set('gj_region', $('region').value); load(); };
+let region = NAMES.includes(store.get('gj_region')) ? store.get('gj_region') : '서울';
+$('regions').innerHTML = NAMES.map(n => `<button>${n}</button>`).join('');
+const markRegion = () => $('regions').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.textContent === region));
+$('regions').onclick = e => {
+  if (e.target.tagName !== 'BUTTON') return;
+  region = e.target.textContent; store.set('gj_region', region); markRegion(); load();
+};
+markRegion();
 
 async function load() {
-  const d = state = await api('/api/today?region=' + encodeURIComponent($('region').value));
+  const d = state = await api('/api/today?region=' + encodeURIComponent(region));
   if (d.error) { $('fcBig').textContent = d.error; return; }
   const t = d.total || {};
   $('sKnee').textContent = t.knee || 0; $('sFc').textContent = t.fc || 0; $('sDraw').textContent = '무승부 ' + (t.draw || 0);
@@ -172,7 +181,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 
 document.querySelectorAll('.picks button').forEach(b => b.onclick = async () => {
   $('msg').textContent = '접수 중…';
-  const r = await api('/api/vote', { method: 'POST', body: JSON.stringify({ pick: +b.dataset.p, region: $('region').value, nick: $('nick').value }) });
+  const r = await api('/api/vote', { method: 'POST', body: JSON.stringify({ pick: +b.dataset.p, region: region, nick: $('nick').value }) });
   $('msg').textContent = r.error || '';
   if (r.ok) load();
 });
